@@ -28,3 +28,7 @@ python3 fetch_coins.py --owner "0xefa434f1441f5d61bfb5f3d9a26e494e8fcaef87a69cd9
 ```bash
 python3 merge_coins.py --prv-key "KEY" --signer "0xADDRESS" --gas-object "0xOBJECT" --gas-to-split "0xGAS" --num-workers 5
 ```
+
+# Common Errors
+You will most likely run into errors like `ObjectNotFound`, `ObjectVersionNotAvailableForConsumption`, and `RpcError`, particularly with the split fetch_coins and merge_coins step. 
+Due to the bottleneck in fetching coins, and transient errors, it may be easier to let `merge_coins_pubsub.py` run in the background.
