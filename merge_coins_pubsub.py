@@ -4,10 +4,8 @@ import argparse
 import queue
 import threading
 
-
 from pysui import __version__, SuiConfig, SyncClient, SuiAddress
 from pysui.sui.sui_txn import SyncTransaction
-from pysui.sui.sui_txresults import SuiCoinObject, AddressOwner
 
 
 def get_coins(owner, url, coin_type="0x2::sui::SUI", cursor=None, limit=1000):
@@ -27,16 +25,9 @@ def fetch_coins(coin_queue, gas_object, owner, url, coin_type="0x2::sui::SUI", c
         response = get_coins(owner, url, coin_type, cursor, limit)
         if response:
             fetched_coins = response['result']['data']
-            unique_coins = []
-            seen = set([gas_object])
-            for coin in fetched_coins:
-                if coin['coinObjectId'] not in seen:
-                    unique_coins.append(coin)
-                    seen.add(coin['coinObjectId'])
-            unique_coins = [SuiCoinObject.from_dict(coin) for coin in unique_coins]
-            for coin in unique_coins:
-                setattr(coin, 'owner', AddressOwner(address_owner=owner, owner_type="AddressOwner"))
-            coins.extend(unique_coins)                        
+            coins_to_merge = set([coin['coinObjectId'] for coin in fetched_coins])
+            coins_to_merge.discard(gas_object)
+            coins.extend(list(coins_to_merge))                        
 
             has_next_page = response['result']['hasNextPage']
             cursor = response['result']['nextCursor']
@@ -56,7 +47,7 @@ def fetch_coins(coin_queue, gas_object, owner, url, coin_type="0x2::sui::SUI", c
 def merge_coins(coin_queue, client, signer, gas_object):
     leftover_coin = None
     while True:
-        coins_to_merge: list[SuiCoinObject] = coin_queue.get()
+        coins_to_merge = coin_queue.get()
         if coins_to_merge is None:
             break
         if leftover_coin is not None:
@@ -67,19 +58,11 @@ def merge_coins(coin_queue, client, signer, gas_object):
         )
         
         result = txn.execute(use_gas_object=gas_object)
-        if result.is_ok():
-            print("ok")
+        if not result.is_ok():
+            print(result.result_string)
         else:
-            print(result.result_string)    
+            print("ok")        
         leftover_coin = coins_to_merge[0]
-
-def worker(coin_queue, client, signer, gas_object):
-    while True:
-        item = coin_queue.get()
-        if item is None:
-            break
-        merge_coins(item, client, signer, gas_object)
-        coin_queue.task_done()
 
 def main():    
     parser = argparse.ArgumentParser()
@@ -110,4 +93,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # invoke with python3 merge_coins_pubsub.py --prv-key "KEY" --signer "0xADDRESS" --gas-object "0xOBJECTID"    
+    # invoke with python3 merge_coins_pubsub.py --prv-key "KEY" --signer "0xADDRESS" --gas-object "0xOBJECTID"
