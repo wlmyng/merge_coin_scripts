@@ -3,10 +3,17 @@ import json
 import argparse
 import queue
 import threading
+import os
+from datetime import datetime
+
 
 from pysui import __version__, SuiConfig, SyncClient, SuiAddress
 from pysui.sui.sui_txn import SyncTransaction
 
+def dump_to_json(coins):
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+    with open(f'coins/{timestamp}.json', 'w') as f:
+        json.dump(coins, f)
 
 def get_coins(owner, url, coin_type="0x2::sui::SUI", cursor=None, limit=1000):
     payload = {
@@ -61,7 +68,8 @@ def merge_coins(coin_queue, client, signer, gas_object):
         if not result.is_ok():
             print(result.result_string)
         else:
-            print("ok")        
+            print("ok")
+            dump_to_json(coins_to_merge[1:])
         leftover_coin = coins_to_merge[0]
 
 def main():    
@@ -81,6 +89,8 @@ def main():
     gas_object = args.gas_object
                     
     coin_queue = queue.Queue()
+
+    os.makedirs("coins", exist_ok=True)
 
     fetch_thread = threading.Thread(target=fetch_coins, args=(coin_queue, gas_object, signer, args.rpc_url))
     merge_thread = threading.Thread(target=merge_coins, args=(coin_queue, client, signer, gas_object))
