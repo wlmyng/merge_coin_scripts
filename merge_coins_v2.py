@@ -35,7 +35,7 @@ def process_coins(queue, dead_letter_queue, client, signer, gas_object):
         try:
             merge_coins_helper(coins_to_merge, client, signer, gas_object)
         except Exception as e:
-            dead_letter_queue.put(coins_to_merge)
+            dead_letter_queue.put((e, coins_to_merge))
     
 def main():    
     parser = argparse.ArgumentParser()
@@ -70,7 +70,8 @@ def main():
 
     counter = 0
     while not dead_letter_queue.empty():
-        dead_letter_queue.get()
+        item = dead_letter_queue.get()
+        print(item[0])
         counter += 1
 
     print(counter)

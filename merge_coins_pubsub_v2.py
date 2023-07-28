@@ -179,12 +179,11 @@ def merge_coins_helper(coins_to_merge: List[SuiCoinObject], client, signer, gas_
     try:
         result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
         if not result.is_ok():
-            raise Exception(f"Transaction execution failed with error: {result.result_string}")
+            raise Exception(f"{result.result_string}")            
         else:
             print("ok")
-    except Exception as e:
-        print("not ok")
-        raise Exception(f"Error occurred: {e}")
+    except Exception as e:        
+        raise Exception(e)        
 
 def merge_coins(coin_queue, client, signer, gas_object):    
     while True:
