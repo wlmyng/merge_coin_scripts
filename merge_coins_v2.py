@@ -9,7 +9,7 @@ from pysui.sui.sui_txresults import SuiCoinObject
 
 from merge_coins_pubsub_v2 import merge_coins_helper
 
-def fetch_coins(queues, dead_letter_queue, filename, gas_objects, chunksize=12500):
+def fetch_coins(queues, filename, gas_objects, chunksize=12500):
     column_names = ['balance', 'checkpoint', 'coin_object_id', 'version', 'digest', 'owner_type', 
                 'owner_address', 'initial_shared_version', 'previous_transaction', 
                 'coin_type', 'object_status', 'has_public_transfer', 'storage_rebate', 'bcs']
@@ -22,10 +22,6 @@ def fetch_coins(queues, dead_letter_queue, filename, gas_objects, chunksize=1250
             coins_to_merge = [SuiCoinObject.from_dict(obj) for obj in sub_chunk]
             queues[i // 250 % len(queues)].put(coins_to_merge)            
 
-    counter = 0
-    while not dead_letter_queue.empty():
-        queues[counter % len(queues)].put(dead_letter_queue.get())
-        
     for q in queues:
         q.put(None)
 
@@ -39,7 +35,6 @@ def process_coins(queue, dead_letter_queue, client, signer, gas_object):
         try:
             merge_coins_helper(coins_to_merge, client, signer, gas_object)
         except Exception as e:
-            print(f"Error encountered: {e}, adding to dead letter queue")
             dead_letter_queue.put(coins_to_merge)
     
 def main():    
@@ -66,12 +61,19 @@ def main():
     for t in consumer_threads:
         t.start()
 
-    producer_thread = threading.Thread(target=fetch_coins, args=(queues, dead_letter_queue, args.filename, gas_objects))
-    producer_thread.start()
+    producer_thread = threading.Thread(target=fetch_coins, args=(queues, args.filename, gas_objects))
+    producer_thread.start()        
 
     producer_thread.join()
     for t in consumer_threads:
         t.join()
+
+    counter = 0
+    while not dead_letter_queue.empty():
+        dead_letter_queue.get()
+        counter += 1
+
+    print(counter)
     
 if __name__ == "__main__":
     main()    

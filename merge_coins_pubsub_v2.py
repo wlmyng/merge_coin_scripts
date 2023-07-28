@@ -5,7 +5,6 @@ import queue
 import threading
 from typing import Union, Optional, List
 import base64
-import logging
 import time
 import random
 
@@ -22,11 +21,6 @@ from pysui.sui.sui_builders.base_builder import (
     SuiRequestType,
 )
 from pysui.sui.sui_txresults import SuiCoinObject
-
-logger = logging.getLogger("pysui.sync_transaction")
-if not logging.getLogger().handlers:
-    logger.addHandler(logging.NullHandler())
-    logger.propagate = False
 
 class ModifiedSyncTransaction(SyncTransaction):
     def execute_with_multiple_gas(
@@ -181,12 +175,16 @@ def merge_coins_helper(coins_to_merge: List[SuiCoinObject], client, signer, gas_
     txn = ModifiedSyncTransaction(client, initial_sender=SuiAddress(signer))        
     gas_objects = [gas_object]
     gas_objects.extend(coins_to_merge)
-    time.sleep(random.uniform(0, 0.1))
-    result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
-    if not result.is_ok():
-        print(result.result_string)
-    else:
-        print("ok")
+    time.sleep(random.uniform(0, 0.1))    
+    try:
+        result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
+        if not result.is_ok():
+            raise Exception(f"Transaction execution failed with error: {result.result_string}")
+        else:
+            print("ok")
+    except Exception as e:
+        print("not ok")
+        raise Exception(f"Error occurred: {e}")
 
 def merge_coins(coin_queue, client, signer, gas_object):    
     while True:
