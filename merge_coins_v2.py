@@ -35,7 +35,8 @@ def process_coins(queue, dead_letter_queue, client, signer, gas_object):
         try:
             merge_coins_helper(coins_to_merge, client, signer, gas_object)
         except Exception as e:
-            dead_letter_queue.put((e, coins_to_merge))
+            if "Transaction has non recoverable errors from at least 1/3 of validators" not in str(e):            
+                dead_letter_queue.put((e, coins_to_merge))
     
 def main():    
     parser = argparse.ArgumentParser()
@@ -70,9 +71,7 @@ def main():
 
     counter = 0
     while not dead_letter_queue.empty():
-        item = dead_letter_queue.get()
-        if "Transaction has non recoverable errors from at least 1/3 of validators" in str(item[0]):
-            continue        
+        item = dead_letter_queue.get()        
         print(item)
         counter += 1
 
