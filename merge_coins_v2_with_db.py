@@ -21,8 +21,7 @@ def setup_db(purge, filename):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='coins'")
     
     if cursor.fetchone():
-        if purge:            
-            print("purge")
+        if purge:                        
             conn.execute("DROP TABLE coins")
         else:            
             return conn
@@ -40,28 +39,29 @@ def setup_db(purge, filename):
 
 
 def fetch_coins(queues, results_queue, conn: Connection, gas_objects, retry_failed=False, chunksize=250):
+    db_idx = 0
     cursor = conn.cursor()    
-    gas_objects_placeholders = ', '.join(['?' for _ in gas_objects])
-    # status_filter = 'status IS NULL' if not retry_failed else "status IS NULL or status not in ('processing', 'processed')"
+    gas_objects_placeholders = ', '.join(['?' for _ in gas_objects])    
     status_filter = 'status IS NULL' if not retry_failed else "status IS NULL or status != 'deleted'"
-    fetch_query = f"SELECT * FROM coins WHERE {status_filter} AND coin_object_id NOT IN ({gas_objects_placeholders}) LIMIT ?"
-    fetch_amount = len(queues) * chunksize        
-    while True:
-        params = gas_objects + [fetch_amount]
+    fetch_query = f"SELECT * FROM coins WHERE {status_filter} AND coin_object_id NOT IN ({gas_objects_placeholders}) AND idx > ? ORDER BY idx ASC LIMIT ?"
+    fetch_amount = len(queues) * chunksize                
+    while True:        
+        params = gas_objects + [db_idx, fetch_amount]
         cursor.execute(fetch_query, params)        
-        data_list = [dict(row) for row in cursor.fetchall()]        
-        if not data_list:            
+        data_list = [dict(row) for row in cursor.fetchall()]            
+        if not data_list:                        
             break
+        db_idx = data_list[-1]['idx']
         coins_to_merge = [SuiCoinObject.from_dict(obj) for obj in data_list]
-        indices = [obj['idx'] for obj in data_list]
+        indices = [obj['idx'] for obj in data_list]        
 
-        for i in range(0, len(data_list), 250):            
+        for i in range(0, len(data_list), chunksize):            
             queues[i // chunksize % len(queues)].put((
-                indices[i:i+250],
-                coins_to_merge[i:i+250]
+                indices[i:i+chunksize],
+                coins_to_merge[i:i+chunksize]
             ))
                                     
-        results_queue.put(('processing', None, indices))                            
+        results_queue.put(('processing', None, indices))         
     for q in queues:
         q.put(None)
 
@@ -121,13 +121,9 @@ def process_coins(read_queue, results_queue, client, signer, gas_object):
                         else:
                             filtered_errors.append(error)
                 
-                filtered_errors = errors_array
-                if not filtered_errors:
-                    results_queue.put(("processed", None, indices))
-                else:
-                    error_message = json.dumps(filtered_errors)
-                    error_type = error_type if error_type else "execution_error"                                
-                    results_queue.put((error_type, error_message, indices))
+                error_message = json.dumps(errors_array)
+                error_type = error_type if error_type else "execution_error"                                
+                results_queue.put((error_type, error_message, indices))
             else:
                 error_type = "other_error"
                 results_queue.put((error_type, error_message, indices))                
@@ -175,8 +171,3 @@ def main():
         conn.close()            
 if __name__ == "__main__":
     main()    
-
-
-"""
-Basically, if an object is not found for some reason we aren't able to execute it, and nor are we able to ...
-"""
