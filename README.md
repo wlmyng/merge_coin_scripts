@@ -32,3 +32,15 @@ python3 merge_coins.py --prv-key "KEY" --signer "0xADDRESS" --gas-object "0xOBJE
 # Common Errors
 You will most likely run into errors like `ObjectNotFound`, `ObjectVersionNotAvailableForConsumption`, and `RpcError`, particularly with the split fetch_coins and merge_coins step. 
 Due to the bottleneck in fetching coins, and transient errors, it may be easier to let `merge_coins_pubsub.py` run in the background.
+
+
+# merge_coins_v2.py
+
+Assumes a csv file in the format specified in `fetch_coins`.
+Will kick off number of execution threads = to number of gas objects provided.
+The transaction block executed is an empty transaction that smashes 250 gas coins into the provided gas object - so in theory this script should succeed without running out of gas.
+Relies on `merge_coins_pubsub_v2.py`, which has a custom implementation built on `SyncTransaction` to support providing an array of gas coins.
+
+```
+python3 merge_coins_v2.py --prv-key "KEY" --signer "0xAddress" --gas-objects "0xGas1" "0xGas2" "0xGas3" "0xGas4" "0xGas5" --filename "output.csv"
+````

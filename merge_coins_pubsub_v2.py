@@ -34,7 +34,7 @@ class ModifiedSyncTransaction(SyncTransaction):
         *,
         gas_budget: Optional[Union[str, SuiString]] = "1000000",
         options: Optional[dict] = None,
-        use_gas_objects: Optional[List[SuiCoinObject]] = None,
+        use_gas_objects: Optional[List[Union[str, SuiCoinObject]]] = None,
     ) -> Union[SuiRpcResult, ValueError]:
         assert not self._executed, "Transaction already executed"
         gas_budget = gas_budget if gas_budget else "1000000"
@@ -124,8 +124,7 @@ class ModifiedSyncTransaction(SyncTransaction):
                 if use_coin.object_id in self.builder.objects_registry:                            
                     raise ValueError(
                         f"use_gas_object {use_coin.object_id} in use in transaction."
-                    )
-
+                    )                            
                 gas_objects.append(
                     bcs.ObjectReference(
                         bcs.Address.from_str(use_coin.object_id),
