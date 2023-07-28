@@ -6,7 +6,7 @@ import pandas as pd
 from pysui import __version__, SuiConfig, SyncClient
 from pysui.sui.sui_txresults import SuiCoinObject
 
-from .merge_coins_pubsub_v2 import merge_coins
+from merge_coins_pubsub_v2 import merge_coins
 
 def fetch_coins(queues, filename, gas_objects, chunksize=12500):
     column_names = ['balance', 'checkpoint', 'coin_object_id', 'version', 'digest', 'owner_type', 

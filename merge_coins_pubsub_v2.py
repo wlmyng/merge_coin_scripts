@@ -6,6 +6,8 @@ import threading
 from typing import Union, Optional, List
 import base64
 import logging
+import time
+import random
 
 from pysui import __version__, SuiConfig, SyncClient, SuiAddress, SuiRpcResult
 from pysui.sui.sui_txn import SyncTransaction
@@ -72,7 +74,7 @@ class ModifiedSyncTransaction(SyncTransaction):
                 for_sender = for_sender.multi_sig.as_sui_address
         else:
             for_sender = self.client.config.active_address
-        try:
+        # try:
             # Do the inspection
             logger.debug(f"Inspecting {tx_kind_b64}")
             result = self.client.execute(
@@ -93,20 +95,20 @@ class ModifiedSyncTransaction(SyncTransaction):
                     f"Inspecting transaction failed with {result.result_string}"
                 )
         # Malformed result
-        except KeyError as kexcp:
-            logger.exception(
-                f"Malformed inspection results {result.result_data}"
-            )
-            raise ValueError(
-                f"Malformed inspection results {result.result_data}"
-            )
+        # except KeyError as kexcp:
+        #     logger.exception(
+        #         f"Malformed inspection results {result.result_data}"
+        #     )
+        #     raise ValueError(
+        #         f"Malformed inspection results {result.result_data}"
+        #     )
         # if result.is_ok():
-        ispec: TxInspectionResult = result.result_data
+        # ispec: TxInspectionResult = result.result_data
         gas_budget = (
             gas_budget if isinstance(gas_budget, str) else gas_budget.value
         )
         # Total = computation_cost + non_refundable_storage_fee + storage_cost
-        gas_budget = max(ispec.effects.gas_used.total, int(gas_budget))
+        # gas_budget = max(ispec.effects.gas_used.total, int(gas_budget))
 
         # If user provided
         if use_gas_objects:
@@ -210,6 +212,7 @@ def merge_coins(coin_queue, client, signer, gas_object):
         txn = ModifiedSyncTransaction(client, initial_sender=SuiAddress(signer))        
         gas_objects = [gas_object]
         gas_objects.extend(coins_to_merge)
+        time.sleep(random.uniform(0, 0.1))
         result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
         if not result.is_ok():
             print(result.result_string)
