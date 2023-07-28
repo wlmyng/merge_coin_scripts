@@ -1,9 +1,10 @@
 import argparse
 import queue
 import threading
-from typing import List
 import sqlite3
 from sqlite3 import Connection
+import json
+import ast
 
 
 import pandas as pd
@@ -20,14 +21,13 @@ def setup_db(purge, filename):
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='coins'")
     
     if cursor.fetchone():
-        if purge:
+        if purge:            
+            print("purge")
             conn.execute("DROP TABLE coins")
-        else:
+        else:            
             return conn
-
-    column_names = ['balance', 'checkpoint', 'coin_object_id', 'version', 'digest', 'owner_type', 
-                    'owner_address', 'initial_shared_version', 'previous_transaction', 
-                    'coin_type', 'object_status', 'has_public_transfer', 'storage_rebate', 'bcs']
+        
+    column_names = ['balance', 'coin_object_id', 'version', 'digest', 'previous_transaction', 'coin_type']
 
     df = pd.read_csv(filename, chunksize=50000, names=column_names)
     for chunk in df:
@@ -35,20 +35,22 @@ def setup_db(purge, filename):
 
     conn.execute("ALTER TABLE coins ADD COLUMN status TEXT")
     conn.execute("ALTER TABLE coins ADD COLUMN error TEXT")
+    conn.commit()
     return conn    
 
 
 def fetch_coins(queues, results_queue, conn: Connection, gas_objects, retry_failed=False, chunksize=250):
     cursor = conn.cursor()    
     gas_objects_placeholders = ', '.join(['?' for _ in gas_objects])
-    status_filter = 'status IS NULL' if not retry_failed else "status = 'failed'"
-    fetch_query = f"SELECT * FROM coins WHERE {status_filter} AND coin_object_id NOT IN ({gas_objects_placeholders}) LIMIT ? OFFSET ?"    
+    # status_filter = 'status IS NULL' if not retry_failed else "status IS NULL or status not in ('processing', 'processed')"
+    status_filter = 'status IS NULL' if not retry_failed else "status IS NULL or status != 'deleted'"
+    fetch_query = f"SELECT * FROM coins WHERE {status_filter} AND coin_object_id NOT IN ({gas_objects_placeholders}) LIMIT ?"
     fetch_amount = len(queues) * chunksize        
     while True:
         params = gas_objects + [fetch_amount]
         cursor.execute(fetch_query, params)        
-        data_list = [dict(row) for row in cursor.fetchall()]
-        if not data_list:
+        data_list = [dict(row) for row in cursor.fetchall()]        
+        if not data_list:            
             break
         coins_to_merge = [SuiCoinObject.from_dict(obj) for obj in data_list]
         indices = [obj['idx'] for obj in data_list]
@@ -77,11 +79,11 @@ def write_results(results_queue, conn):
         if status == 'processing':
             query = f"UPDATE coins SET status = 'processing' WHERE idx IN ({placeholders})"
             params = tuple(indices)        
-        elif status == 'processed':
-            query = f"UPDATE coins SET status = 'processed' WHERE idx IN ({placeholders})"
+        elif status == 'deleted':
+            query = f"UPDATE coins SET status = 'deleted' WHERE idx IN ({placeholders})"
             params = tuple(indices)                    
         else:
-            query = f"UPDATE coins SET status = 'failed', error = ? WHERE idx IN ({placeholders})"
+            query = f"UPDATE coins SET status = '{status}', error = ? WHERE idx IN ({placeholders})"
             params = [error] + indices            
         cursor.execute(query, params)
         conn.commit()
@@ -94,16 +96,41 @@ def process_coins(read_queue, results_queue, client, signer, gas_object):
         (indices, coins_to_merge) = data        
         try:
             merge_coins_helper(coins_to_merge, client, signer, gas_object)
-            results_queue.put(('processed', None, indices))
+            results_queue.put(('deleted', None, indices))
         except Exception as e:
             error_message = str(e)
-            if "Transaction has non recoverable errors from at least 1/3 of validators" not in error_message:
-                results_queue.put(('failed', error_message, indices))
-            else:
-                if gas_object in error_message:
-                    results_queue.put(('failed', error_message, indices))
+            error_type = None
+            if "Transaction has non recoverable errors from at least 1/3 of validators" in error_message:                    
+                error_dict = ast.literal_eval(error_message)                
+                errors_array = error_dict['data']                
+                errors_array = [error[0] for error in errors_array]        
+                
+                filtered_errors = []                
+                for error in errors_array:                    
+                    for error_name, error_details in error.items():
+                        if error_name == "RpcError":
+                            continue                                            
+                        elif error_name == "UserInputError":
+                            if error_details['error'].get("ObjectNotFound"):
+                                object_not_found = error_details["error"]["ObjectNotFound"]                            
+                                if object_not_found["object_id"] == gas_object:                                
+                                    error_type = "gas_object_not_found"
+                                    filtered_errors.append(error)                                    
+                                else:
+                                    continue
+                        else:
+                            filtered_errors.append(error)
+                
+                filtered_errors = errors_array
+                if not filtered_errors:
+                    results_queue.put(("processed", None, indices))
                 else:
-                    results_queue.put(('processed', None, indices))
+                    error_message = json.dumps(filtered_errors)
+                    error_type = error_type if error_type else "execution_error"                                
+                    results_queue.put((error_type, error_message, indices))
+            else:
+                error_type = "other_error"
+                results_queue.put((error_type, error_message, indices))                
                 
 def main():    
     parser = argparse.ArgumentParser()
@@ -112,8 +139,8 @@ def main():
     parser.add_argument("--signer", type=str, help="Signer address to use. str repr of SuiAddress.")
     parser.add_argument("--gas-objects", nargs='+', type=str, help="Gas objects to use. str repr of ObjectIDs.")    
     parser.add_argument("--filename", type=str, help="Filename to use.", default="output.csv")
-    parser.add_argument("--purge", type=bool, help="Whether to purge the table if it exists.", default=False)
-    parser.add_argument("--retry-failed", type=bool, help="Whether to retry failed coins.", default=False)
+    parser.add_argument("--purge", help="Whether to purge the table if it exists.", action='store_true')
+    parser.add_argument("--retry-failed", help="Whether to retry failed coins.", action='store_true')
     args = parser.parse_args()
 
     cfg = SuiConfig.user_config(
@@ -148,3 +175,8 @@ def main():
         conn.close()            
 if __name__ == "__main__":
     main()    
+
+
+"""
+Basically, if an object is not found for some reason we aren't able to execute it, and nor are we able to ...
+"""

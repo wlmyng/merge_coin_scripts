@@ -43,8 +43,8 @@ class ModifiedSyncTransaction(SyncTransaction):
             ),
             options=options,
             request_type=SuiRequestType.WAITFORLOCALEXECUTION,
-        )
-        iresult = self.client.execute(exec_tx)
+        )        
+        iresult = self.client.execute(exec_tx)        
         self._executed = True
         return iresult
 

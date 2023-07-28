@@ -49,6 +49,6 @@ python3 merge_coins_v2.py --prv-key "KEY" --signer "0xAddress" --gas-objects "0x
 # merge_coins_v2_with_db.py
 Similar to merge_coins_v2.py, but more robustly handle errors by loading the csv into a sqlite3 database.
 
-Note the added arguments, `--purge` and `--retry-failed`.
+Note the added arguments, `--purge` and `--retry-failed`. Pass the flag `--purge` to wipe the db, and pass the flag `--retry-failed` to retry any `NULL` and `FAILED` transactions.
 
 In terms of a transaction failing, typically the gas coins should still be smashed. The one error that would need to be retried is if ObjectNotFound and the object is the gas object - specifically, somehow the gas object was deleted. These, and other errors not from executing the transaction will be logged as failed.

@@ -2,6 +2,7 @@ import argparse
 import queue
 import threading
 from typing import List
+import ast
 
 import pandas as pd
 from pysui import __version__, SuiConfig, SyncClient
@@ -10,9 +11,7 @@ from pysui.sui.sui_txresults import SuiCoinObject
 from merge_coins_pubsub_v2 import merge_coins_helper
 
 def fetch_coins(queues, filename, gas_objects, chunksize=12500):
-    column_names = ['balance', 'checkpoint', 'coin_object_id', 'version', 'digest', 'owner_type', 
-                'owner_address', 'initial_shared_version', 'previous_transaction', 
-                'coin_type', 'object_status', 'has_public_transfer', 'storage_rebate', 'bcs']
+    column_names = ['balance', 'coin_object_id', 'version', 'digest', 'previous_transaction', 'coin_type']    
     for chunk in pd.read_csv(filename, names=column_names, chunksize=chunksize):
         coins_to_merge = []
         chunk = chunk[~chunk['coin_object_id'].isin(gas_objects)]        
@@ -37,6 +36,12 @@ def process_coins(queue, dead_letter_queue, client, signer, gas_object):
         except Exception as e:
             if "Transaction has non recoverable errors from at least 1/3 of validators" not in str(e):            
                 dead_letter_queue.put((e, coins_to_merge))
+            else:
+                error_message = str(e)
+                error_dict = ast.literal_eval(error_message)
+                errors_array = error_dict['data']
+                errors_array = [error[0] for error in errors_array]
+                print(errors_array)
     
 def main():    
     parser = argparse.ArgumentParser()
