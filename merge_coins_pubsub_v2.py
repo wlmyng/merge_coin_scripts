@@ -62,9 +62,7 @@ class ModifiedSyncTransaction(SyncTransaction):
         use_gas_objects: Optional[List[Union[str, SuiCoinObject]]] = None,
     ) -> Union[bcs.TransactionData, ValueError]:        
         # Get the transaction body
-        tx_kind = self.raw_kind()
-        # Get costs
-        tx_kind_b64 = base64.b64encode(tx_kind.serialize()).decode()
+        tx_kind = self.raw_kind()        
         # Resolve sender address for inspect
         if self.signer_block.sender:
             for_sender: Union[
@@ -74,36 +72,6 @@ class ModifiedSyncTransaction(SyncTransaction):
                 for_sender = for_sender.multi_sig.as_sui_address
         else:
             for_sender = self.client.config.active_address
-        # try:
-            # Do the inspection
-            logger.debug(f"Inspecting {tx_kind_b64}")
-            result = self.client.execute(
-                _DebugInspectTransaction(
-                    sender_address=for_sender, tx_bytes=tx_kind_b64
-                )
-            )
-            if result.is_ok():
-                result = SuiRpcResult(
-                    True, "", TxInspectionResult.factory(result.result_data)
-                )
-            # Bad result
-            else:
-                logger.exception(
-                    f"Inspecting transaction failed with {result.result_string}"
-                )
-                raise ValueError(
-                    f"Inspecting transaction failed with {result.result_string}"
-                )
-        # Malformed result
-        # except KeyError as kexcp:
-        #     logger.exception(
-        #         f"Malformed inspection results {result.result_data}"
-        #     )
-        #     raise ValueError(
-        #         f"Malformed inspection results {result.result_data}"
-        #     )
-        # if result.is_ok():
-        # ispec: TxInspectionResult = result.result_data
         gas_budget = (
             gas_budget if isinstance(gas_budget, str) else gas_budget.value
         )
@@ -114,11 +82,18 @@ class ModifiedSyncTransaction(SyncTransaction):
         if use_gas_objects:
             gas_objects = []
             for use_coin in use_gas_objects:
-                if isinstance(use_coin, str):
-                    res = self.client.get_object(use_coin)
-                    if res.is_ok():
-                        object_read: ObjectRead = res.result_data
-                        use_coin = SuiCoinObject.from_read_object(object_read)
+                if isinstance(use_coin, str):                    
+                    max_retries = 5
+                    base_wait_time = random.uniform(0.1, 0.5)                    
+                    for i in range(max_retries):
+                        res = self.client.get_object(use_coin)
+                        if res.is_ok():
+                            object_read: ObjectRead = res.result_data
+                            use_coin = SuiCoinObject.from_read_object(object_read)
+                            break
+                        else:                            
+                            wait_time = base_wait_time * 2 ** i
+                            time.sleep(wait_time)
                     else:
                         raise ValueError(
                             f"Failed to fetch use_gas_object {use_coin}"
