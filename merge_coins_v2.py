@@ -39,6 +39,7 @@ def process_coins(queue, dead_letter_queue, client, signer, gas_object):
         try:
             merge_coins_helper(coins_to_merge, client, signer, gas_object)
         except Exception as e:
+            print(f"Error encountered: {e}, adding to dead letter queue")
             dead_letter_queue.put(coins_to_merge)
     
 def main():    

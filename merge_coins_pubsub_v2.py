@@ -14,8 +14,6 @@ from pysui.sui.sui_txn import SyncTransaction
 from pysui.sui.sui_types import bcs
 from pysui.sui.sui_types.scalars import SuiString
 from pysui.sui.sui_txn.signing_ms import SigningMultiSig
-from pysui.sui.sui_txresults.complex_tx import TxInspectionResult
-from pysui.sui.sui_txn.transaction import _DebugInspectTransaction
 from pysui.sui.sui_txresults.single_tx import ObjectRead
 from pysui.sui.sui_builders.exec_builders import (
     ExecuteTransaction,
