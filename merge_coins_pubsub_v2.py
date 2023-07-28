@@ -179,21 +179,24 @@ def fetch_coins(coin_queue, gas_object, owner, url, coin_type="0x2::sui::SUI", c
         else:
             break
 
+def merge_coins_helper(coins_to_merge: List[SuiCoinObject], client, signer, gas_object):        
+    txn = ModifiedSyncTransaction(client, initial_sender=SuiAddress(signer))        
+    gas_objects = [gas_object]
+    gas_objects.extend(coins_to_merge)
+    time.sleep(random.uniform(0, 0.1))
+    result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
+    if not result.is_ok():
+        print(result.result_string)
+    else:
+        print("ok")
+
 def merge_coins(coin_queue, client, signer, gas_object):    
     while True:
         coins_to_merge: List[SuiCoinObject] = coin_queue.get()
         if coins_to_merge is None:
             break        
-        txn = ModifiedSyncTransaction(client, initial_sender=SuiAddress(signer))        
-        gas_objects = [gas_object]
-        gas_objects.extend(coins_to_merge)
-        time.sleep(random.uniform(0, 0.1))
-        result = txn.execute_with_multiple_gas(use_gas_objects=gas_objects)
-        if not result.is_ok():
-            print(result.result_string)
-        else:
-            print("ok")
-
+        merge_coins_helper(coins_to_merge, client, signer, gas_object)
+        
 def main():    
     parser = argparse.ArgumentParser()
     parser.add_argument("--rpc-url", type=str, help="RPC URL to use", default="https://fullnode.testnet.sui.io:443")
