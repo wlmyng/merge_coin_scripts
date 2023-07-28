@@ -71,7 +71,9 @@ def main():
     counter = 0
     while not dead_letter_queue.empty():
         item = dead_letter_queue.get()
-        print(item[0])
+        if "Transaction has non recoverable errors from at least 1/3 of validators" in str(item[0]):
+            continue        
+        print(item)
         counter += 1
 
     print(counter)
