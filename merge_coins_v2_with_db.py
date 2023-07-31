@@ -149,8 +149,11 @@ def main():
                     
     queues = [queue.Queue() for _ in range(len(gas_objects))]    
     results_queue = queue.Queue()
+    print("Setting up db")
     conn = setup_db(args.purge, args.filename)
+    print("db setup complete")
 
+    print("Gas smashing...")
     try:
         writer_thread = threading.Thread(target=write_results, args=(results_queue, conn))
         writer_thread.start()
@@ -162,6 +165,7 @@ def main():
         producer_thread = threading.Thread(target=fetch_coins, args=(queues, results_queue, conn, gas_objects, args.retry_failed))
         producer_thread.start()            
     finally:
+        print("Gas smashing complete. Cleaning up...")
         # Cleanup. Close producer_thread, consumer_threads, writer_thread, conn.
         producer_thread.join()
         for t in consumer_threads:
