@@ -29,25 +29,8 @@ python3 fetch_coins.py --owner "0xefa434f1441f5d61bfb5f3d9a26e494e8fcaef87a69cd9
 python3 merge_coins.py --prv-key "KEY" --signer "0xADDRESS" --gas-object "0xOBJECT" --gas-to-split "0xGAS" --num-workers 5
 ```
 
-# Common Errors
-You will most likely run into errors like `ObjectNotFound`, `ObjectVersionNotAvailableForConsumption`, and `RpcError`, particularly with the split fetch_coins and merge_coins step. 
-Due to the bottleneck in fetching coins, and transient errors, it may be easier to let `merge_coins_pubsub.py` run in the background.
-
-
-# merge_coins_v2.py
-
-Assumes a csv file in the format specified in `fetch_coins`.
-Will kick off number of execution threads = to number of gas objects provided.
-The transaction block executed is an empty transaction that smashes 250 gas coins into the provided gas object - so in theory this script should succeed without running out of gas.
-Relies on `merge_coins_pubsub_v2.py`, which has a custom implementation built on `SyncTransaction` to support providing an array of gas coins.
-
-```
-python3 merge_coins_v2.py --prv-key "KEY" --signer "0xAddress" --gas-objects "0xGas1" "0xGas2" "0xGas3" "0xGas4" "0xGas5" --filename "output.csv"
-````
-
-
 # merge_coins_v2_with_db.py
-Similar to merge_coins_v2.py, but more robustly handle errors by loading the csv into a sqlite3 database.
+More robustly handle errors by loading the csv into a sqlite3 database.
 
 Note the added arguments, `--purge` and `--retry-failed`. Pass the flag `--purge` to wipe the db, and pass the flag `--retry-failed` to retry any transactions that are `NULL` or not `deleted`.
 
@@ -56,3 +39,7 @@ In terms of a transaction failing, typically the gas coins should still be smash
 ```
 python3 merge_coins_v2_with_db.py --prv-key "KEY" --signer "0xAddress" --gas-objects "0xGas" "0xGas" "0xGas" "0xGas" "0xGas" --filename "cleaned_output.csv.csv" --purge
 ```
+
+## Common Errors
+1. "other_error" in db -> "Failed to fetch use_gas_object" - most likely the gas object was somehow deleted. This should not usually happen as the query to sqlite3 should filter out gas objects. If this does occur, you can resolve by providing another gas object.
+2. "execution_error" -> typically ObjectNotFound, ObjectVersionNotAvailableForConsumption. With ObjectNotFound, you'll have to mark the object mentioned in the error as deleted in the db. This may take several iterations, as execution will only print the first error. ObjectVersionNotAvailableForConsumption should be retryable after updating the object version in the db.

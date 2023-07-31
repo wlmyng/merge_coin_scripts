@@ -88,7 +88,7 @@ class ModifiedSyncTransaction(SyncTransaction):
                             time.sleep(wait_time)
                     else:
                         raise ValueError(
-                            f"Failed to fetch use_gas_object {use_coin}"
+                            f"Failed to fetch use_gas_object {use_coin}, error: {res.result_string}"
                         )
                 if use_coin.object_id in self.builder.objects_registry:                            
                     raise ValueError(
